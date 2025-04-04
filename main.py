@@ -1,7 +1,7 @@
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from price_fetcher import fetch_price
-from news_scraper import fetch_articles
+from news_fetcher import fetch_articles
 from sentiment_analyzer import analyze_sentiment
 from database import save_sentiment
 
