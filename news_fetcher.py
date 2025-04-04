@@ -98,5 +98,13 @@ def run_sentiment_update():
         except Exception as e:
             print(f"❌ Error processing {symbol}: {e}")
 
+# ✅ Add this at bottom of news_fetcher.py
+def fetch_articles(symbol):
+    metal_name = METALS.get(symbol, "")
+    if not metal_name:
+        return []
+    return fetch_news(metal_name)
+
 if __name__ == "__main__":
     run_sentiment_update()
+
