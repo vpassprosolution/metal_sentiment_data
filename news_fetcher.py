@@ -1,10 +1,11 @@
-# ✅ FULL news_fetcher.py with financial filtering + fallback
+# ✅ FULL FIXED news_fetcher.py (with sentiment_analyzer integration)
 
 import requests
 import time
 from datetime import datetime
 from database import save_sentiment
 from price_fetcher import fetch_price
+from sentiment_analyzer import analyze_sentiment  # ✅ Added
 
 GNEWS_API_KEY = "dd0490acae3413a8b95335a8ace58347"
 GNEWS_ENDPOINT = "https://gnews.io/api/v4/search"
@@ -31,7 +32,7 @@ FINANCIAL_KEYWORDS = [
 ]
 
 import re
-KEYWORD_PATTERN = re.compile(r'\\b(?:' + '|'.join(FINANCIAL_KEYWORDS) + r')\\b', re.IGNORECASE)
+KEYWORD_PATTERN = re.compile(r'\b(?:' + '|'.join(FINANCIAL_KEYWORDS) + r')\b', re.IGNORECASE)
 
 def is_relevant_article(article):
     combined_text = f"{article['title']} {article.get('description', '')}"
@@ -62,18 +63,6 @@ def fetch_news(metal_name):
 
     return relevant_articles
 
-def generate_sentiment(articles):
-    # 🧠 Simple logic: more positive = "Bullish", more negative = "Bearish"
-    positive = sum("rise" in a["title"].lower() for a in articles)
-    negative = sum("fall" in a["title"].lower() for a in articles)
-
-    if positive > negative:
-        return "Bullish", "BUY"
-    elif negative > positive:
-        return "Bearish", "SELL"
-    else:
-        return "Neutral", "HOLD"
-
 def process_news(symbol, metal_name):
     print(f"\n📰 Fetching news for {symbol} ({metal_name})...")
     articles = fetch_news(metal_name)
@@ -84,7 +73,9 @@ def process_news(symbol, metal_name):
 
     print(f"✅ 3 articles found for {symbol} ({metal_name})")
     price = fetch_price(symbol)
-    sentiment, recommendation = generate_sentiment(articles)
+
+    # ✅ Use the new analyzer
+    sentiment, recommendation, articles = analyze_sentiment(articles)
 
     save_sentiment(symbol, price, sentiment, recommendation, articles)
     print(f"✅ {symbol} saved to database")
@@ -107,4 +98,3 @@ def fetch_articles(symbol):
 
 if __name__ == "__main__":
     run_sentiment_update()
-
