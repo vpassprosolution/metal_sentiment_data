@@ -1,54 +1,64 @@
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from price_fetcher import fetch_price
+from fastapi import FastAPI
 from news_fetcher import fetch_articles
+from price_fetcher import fetch_price
 from sentiment_analyzer import analyze_sentiment
 from database import save_sentiment
+
+app = FastAPI()
 
 # ✅ Metals we track
 METALS = ["XAU", "XAG", "XCU", "XPT", "XPD", "ALU", "ZNC", "NI", "TIN", "LEAD"]
 
+# ✅ API Endpoint to get sentiment for one metal
+@app.get("/get_metal_sentiment")
+async def get_metal_sentiment(symbol: str):
+    if symbol not in METALS:
+        return {"error": "Invalid metal symbol"}
+
+    price = fetch_price(symbol)
+    articles = fetch_articles(symbol)
+
+    if not articles:
+        return {"symbol": symbol, "price": price, "sentiment": "N/A", "recommendation": "N/A", "articles": []}
+
+    sentiment, recommendation = analyze_sentiment(articles)
+
+    return {
+        "symbol": symbol,
+        "price": price,
+        "sentiment": sentiment,
+        "recommendation": recommendation,
+        "articles": articles
+    }
+
+# ✅ Background job
 async def run_sentiment_update():
-    print("\n🔁 Running metal sentiment updater...\n")
-
+    print("🔁 Running metal sentiment updater...")
     for symbol in METALS:
-        print(f"📰 Fetching news for {symbol}...")
+        try:
+            price = fetch_price(symbol)
+            articles = fetch_articles(symbol)
 
-        # Step 1: Fetch news articles
-        articles = await fetch_articles(symbol)
-        if len(articles) < 3:
-            print(f"❌ Not enough good news for {symbol}. Skipping update.\n")
-            continue
+            if not articles or len(articles) < 3:
+                print(f"⚠️ Skipping {symbol} (not enough news)")
+                continue
 
-        # Step 2: Fetch price
-        price = await fetch_price(symbol)
-        if price is None:
-            print(f"❌ Failed to get price for {symbol}. Skipping.\n")
-            continue
-
-        # Step 3: Analyze sentiment
-        sentiment, recommendation = analyze_sentiment(articles)
-
-        # Step 4: Save to DB
-        save_sentiment(
-            symbol=symbol,
-            price=price,
-            sentiment=sentiment,
-            recommendation=recommendation,
-            article_data=articles
-        )
-
-        print(f"✅ {symbol} saved to database\n")
-
-    print("✅ All metals processed.\n")
+            sentiment, recommendation = analyze_sentiment(articles)
+            save_sentiment(symbol, price, sentiment, recommendation, articles)
+            print(f"✅ {symbol} saved")
+        except Exception as e:
+            print(f"❌ Error on {symbol}: {e}")
 
 def start_scheduler():
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(run_sentiment_update, "interval", hours=4)  # Run every 4 hours
+    scheduler.add_job(run_sentiment_update, "interval", hours=4)
     scheduler.start()
-    print("🕓 Scheduler started (every 4 hours)")
+    print("🕓 Scheduler started")
 
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
+@app.on_event("startup")
+async def startup_event():
     start_scheduler()
-    loop.run_forever()
+    await run_sentiment_update()  # ← run once at startup
+
